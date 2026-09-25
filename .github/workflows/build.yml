@@ -10,11 +10,15 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build pkg-config libgtk-3-dev libxapp-dev
+          sudo apt-get install -y meson ninja-build pkg-config libgtk-3-dev libxapp-dev xvfb xauth
       - name: Configure
         run: meson setup build -Dwerror=true
       - name: Build
         run: meson compile -C build
       - name: Storage and safety tests
         run: meson test -C build --print-errorlogs
-
+      - name: GTK startup smoke test
+        run: |
+          status=0
+          GSETTINGS_BACKEND=memory xvfb-run -a timeout 3s ./build/paladin-launcher || status=$?
+          test "$status" -eq 124

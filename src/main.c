@@ -4,16 +4,22 @@
 
 #include <gtk/gtk.h>
 
+typedef struct { GtkApplication *application; char *id; } CliContext;
+
 static void cli_finished(GObject *object, GAsyncResult *result, gpointer user_data)
 {
-    GtkApplication *application = user_data;
+    CliContext *context = user_data;
     g_autoptr(GError) error = NULL;
     if (!g_subprocess_wait_finish(G_SUBPROCESS(object), result, &error))
         g_printerr("Paladin: %s\n", error->message);
     else if (!g_subprocess_get_successful(G_SUBPROCESS(object)))
         g_printerr("Paladin: game exited with status %d\n",
                    g_subprocess_get_exit_status(G_SUBPROCESS(object)));
-    g_application_release(G_APPLICATION(application));
+    g_hash_table_remove(ui_running_games(context->application), context->id);
+    ui_refresh_game(context->application, context->id);
+    g_application_release(G_APPLICATION(context->application));
+    g_free(context->id);
+    g_free(context);
 }
 
 static int command_line(GApplication *application, GApplicationCommandLine *command,
@@ -37,13 +43,24 @@ static int command_line(GApplication *application, GApplicationCommandLine *comm
             error ? error->message : "Game is not ready");
         return 1;
     }
+    GtkApplication *gtk_app = GTK_APPLICATION(application);
+    GHashTable *running = ui_running_games(gtk_app);
+    if (g_hash_table_contains(running, game->id)) {
+        g_application_command_line_printerr(command, "Paladin: this game is already running or installing\n");
+        return 1;
+    }
     g_autoptr(GSubprocess) process = runner_start(game, game->executable, FALSE, &error);
     if (!process) {
         g_application_command_line_printerr(command, "Paladin: %s\n", error->message);
         return 1;
     }
+    g_hash_table_add(running, g_strdup(game->id));
+    ui_refresh_game(gtk_app, game->id);
+    CliContext *context = g_new0(CliContext, 1);
+    context->application = gtk_app;
+    context->id = g_strdup(game->id);
     g_application_hold(application);
-    g_subprocess_wait_async(process, NULL, cli_finished, application);
+    g_subprocess_wait_async(process, NULL, cli_finished, context);
     return 0;
 }
 

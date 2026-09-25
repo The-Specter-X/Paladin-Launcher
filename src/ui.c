@@ -10,7 +10,7 @@ typedef struct {
     GtkWidget *window, *list, *detail;
     GPtrArray *games;
     Game *selected; /* Borrowed from games. */
-    GHashTable *running; /* Game IDs in this instance. */
+    GHashTable *running; /* Borrowed from the application. */
 } Ui;
 
 typedef struct { Ui *ui; char *id; gboolean installer; } RunContext;
@@ -572,8 +572,24 @@ static void window_destroy(GtkWidget *widget, Ui *ui)
 static void ui_free(Ui *ui)
 {
     g_clear_pointer(&ui->games, g_ptr_array_unref);
-    g_hash_table_unref(ui->running);
     g_free(ui);
+}
+
+GHashTable *ui_running_games(GtkApplication *application)
+{
+    GHashTable *running = g_object_get_data(G_OBJECT(application), "paladin-running");
+    if (!running) {
+        running = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+        g_object_set_data_full(G_OBJECT(application), "paladin-running", running,
+                               (GDestroyNotify) g_hash_table_unref);
+    }
+    return running;
+}
+
+void ui_refresh_game(GtkApplication *application, const char *id)
+{
+    Ui *ui = g_object_get_data(G_OBJECT(application), "paladin-ui");
+    if (ui && ui->window) refresh(ui, id);
 }
 
 void ui_activate(GtkApplication *application)
@@ -582,7 +598,7 @@ void ui_activate(GtkApplication *application)
     if (!ui) {
         ui = g_new0(Ui, 1);
         ui->app = application;
-        ui->running = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+        ui->running = ui_running_games(application);
         g_object_set_data_full(G_OBJECT(application), "paladin-ui", ui, (GDestroyNotify) ui_free);
     }
     if (ui->window) { gtk_window_present(GTK_WINDOW(ui->window)); return; }

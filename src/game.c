@@ -395,7 +395,8 @@ GPtrArray *game_find_executables(const Game *game)
 {
     g_autofree char *prefix = game_prefix_path(game);
     g_autoptr(GPtrArray) found = g_ptr_array_new_with_free_func((GDestroyNotify) candidate_free);
-    const char *folders[] = {"Program Files", "Program Files (x86)", NULL};
+    const char *folders[] = {"Program Files", "Program Files (x86)",
+                             "Games", "GOG Games", NULL};
     for (int i = 0; folders[i]; i++) {
         g_autofree char *dir = g_build_filename(prefix, "drive_c", folders[i], NULL);
         scan_exes(game, dir, found, 0);
