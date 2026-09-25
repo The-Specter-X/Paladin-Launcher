@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Paladin Launcher
+Comment=Install and play Windows games
+Exec=paladin-launcher
+Icon=applications-games
+Categories=Game;
+Terminal=false
+StartupNotify=true
+
