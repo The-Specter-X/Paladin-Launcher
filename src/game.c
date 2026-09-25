@@ -97,6 +97,7 @@ gboolean game_save(const Game *game, GError **error)
     g_key_file_set_boolean(key, "Game", "Wayland", game->wayland);
     g_key_file_set_boolean(key, "Game", "WoW64", game->wow64);
     g_key_file_set_boolean(key, "Game", "FSR", game->fsr);
+    g_key_file_set_boolean(key, "Game", "NVAPI", game->nvapi);
     g_key_file_set_boolean(key, "Game", "WineD3D", game->wined3d);
     g_key_file_set_boolean(key, "Game", "DesktopShortcut", game->desktop_shortcut);
     g_key_file_set_boolean(key, "Game", "Ready", game->ready);
@@ -138,6 +139,7 @@ Game *game_load(const char *id, GError **error)
     game->wayland = read_boolean(key, "Wayland", TRUE);
     game->wow64 = read_boolean(key, "WoW64", TRUE);
     game->fsr = read_boolean(key, "FSR", FALSE);
+    game->nvapi = read_boolean(key, "NVAPI", FALSE);
     game->wined3d = read_boolean(key, "WineD3D", FALSE);
     game->desktop_shortcut = read_boolean(key, "DesktopShortcut", FALSE);
     game->ready = read_boolean(key, "Ready", FALSE);

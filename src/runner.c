@@ -81,6 +81,8 @@ GSubprocess *runner_start(const Game *game, const char *executable,
                                  game->wow64 ? "1" : "0", TRUE);
     g_subprocess_launcher_setenv(launcher, "WINE_FULLSCREEN_FSR",
                                  game->fsr ? "1" : "0", TRUE);
+    g_subprocess_launcher_setenv(launcher, "PROTON_ENABLE_NVAPI",
+                                 game->nvapi ? "1" : "0", TRUE);
     g_subprocess_launcher_setenv(launcher, "PROTON_USE_WINED3D",
                                  game->wined3d ? "1" : "0", TRUE);
     if (!add_custom_env(launcher, game->environment, error)) return NULL;

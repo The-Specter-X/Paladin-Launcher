@@ -14,6 +14,7 @@ typedef struct {
     gboolean wayland;
     gboolean wow64;
     gboolean fsr;
+    gboolean nvapi;
     gboolean wined3d;
     gboolean desktop_shortcut;
     gboolean ready;
@@ -38,4 +39,3 @@ gboolean game_copy_folder(const char *source, const char *destination,
                           GCancellable *cancellable, GError **error);
 /* Candidate executable paths sorted with the most likely first. */
 GPtrArray *game_find_executables(const Game *game); /* char*, owned by array */
-

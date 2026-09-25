@@ -12,7 +12,10 @@ Steam and a separate system Wine installation are not required.
   the installer in a new prefix, scans for likely game executables, and asks
   you to confirm the launcher. The installer and game use the same prefix.
 - A per-game prefix, runner selection, game arguments, environment variables,
-  native Wayland or XWayland, new WoW64, FSR, and a WineD3D fallback.
+  native Wayland or XWayland, new WoW64, FSR, NVIDIA NVAPI, and a WineD3D fallback.
+  GE-Proton supplies DXVK and VKD3D-Proton; they are shared with the runner and
+  configured independently for each game's prefix. Proton handles its normal
+  synchronization defaults, with per-game environment overrides when needed.
 - Direct application-menu shortcuts and optional desktop shortcuts, each
   targeting `paladin-launcher --play GAME-ID`.
 - View output/error logs, browse managed files, and remove a game and prefix.

@@ -176,9 +176,11 @@ static void run_finished(GObject *object, GAsyncResult *result, gpointer user_da
     g_autoptr(GError) error = NULL;
     gboolean completed = g_subprocess_wait_finish(G_SUBPROCESS(object), result, &error);
     g_hash_table_remove(ui->running, context->id);
-    if (context->installer) {
+    if (context->installer && completed && g_subprocess_get_successful(G_SUBPROCESS(object))) {
         g_autoptr(Game) game = game_load(context->id, NULL);
-        if (game && completed) finish_install(ui, game);
+        if (game) finish_install(ui, game);
+    } else if (context->installer && completed && ui->window) {
+        show_error(ui, "The installer did not complete successfully. Check Logs, then use Run installer to retry.");
     }
     if (ui->window && error) show_error(ui, error->message);
     if (ui->window) refresh(ui, context->id);
@@ -285,6 +287,7 @@ static void settings(GtkButton *unused, Ui *ui)
     GtkWidget *wayland = settings_check(box, "Native Wine Wayland (disable for XWayland)", game->wayland);
     GtkWidget *wow64 = settings_check(box, "New WoW64 mode", game->wow64);
     GtkWidget *fsr = settings_check(box, "GE-Proton fullscreen FSR", game->fsr);
+    GtkWidget *nvapi = settings_check(box, "NVIDIA NVAPI support", game->nvapi);
     GtkWidget *wined3d = settings_check(box, "Use WineD3D instead of DXVK (older GPUs)", game->wined3d);
     GtkWidget *desktop = settings_check(box, "Create a desktop shortcut", game->desktop_shortcut);
     gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Environment variables (one NAME=value per line)"), FALSE, FALSE, 0);
@@ -309,6 +312,7 @@ static void settings(GtkButton *unused, Ui *ui)
         game->wayland = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(wayland));
         game->wow64 = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(wow64));
         game->fsr = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(fsr));
+        game->nvapi = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(nvapi));
         game->wined3d = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(wined3d));
         game->desktop_shortcut = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(desktop));
         g_autoptr(GError) error = NULL;

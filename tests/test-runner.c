@@ -11,9 +11,9 @@ static void runner_isolates_launches(void)
     g_assert_cmpint(g_mkdir_with_parents(bin, 0700), ==, 0);
     g_autofree char *fake = g_build_filename(bin, "umu-run", NULL);
     const char *script = "#!/bin/sh\n"
-        "printf 'prefix=%s\\nrunner=%s\\nwayland=%s\\nwow64=%s\\ncustom=%s\\ncount=%s\\nthird=%s\\n' "
+        "printf 'prefix=%s\\nrunner=%s\\nwayland=%s\\nwow64=%s\\nnvapi=%s\\ncustom=%s\\ncount=%s\\nthird=%s\\n' "
         "\"$WINEPREFIX\" \"$PROTONPATH\" \"$PROTON_ENABLE_WAYLAND\" "
-        "\"$PROTON_USE_WOW64\" \"$CUSTOM_FLAG\" \"$#\" \"$3\"\n";
+        "\"$PROTON_USE_WOW64\" \"$PROTON_ENABLE_NVAPI\" \"$CUSTOM_FLAG\" \"$#\" \"$3\"\n";
     g_assert_true(g_file_set_contents(fake, script, -1, NULL));
     g_assert_cmpint(g_chmod(fake, 0755), ==, 0);
     g_autofree char *old_path = g_strdup(g_getenv("PATH"));
@@ -27,6 +27,7 @@ static void runner_isolates_launches(void)
     first->arguments = g_strdup("--foo 'two words'");
     g_free(first->environment);
     first->environment = g_strdup("CUSTOM_FLAG=one");
+    first->nvapi = TRUE;
     g_autoptr(Game) second = game_new("Second");
     second->wayland = FALSE;
     second->wow64 = FALSE;
@@ -50,8 +51,8 @@ static void runner_isolates_launches(void)
     g_autofree char *expected_b = g_strdup_printf("prefix=%s\n", prefix_b);
     g_assert_nonnull(strstr(output_a, expected_a));
     g_assert_nonnull(strstr(output_b, expected_b));
-    g_assert_nonnull(strstr(output_a, "runner=GE-Proton\nwayland=1\nwow64=1\ncustom=one\ncount=3\nthird=two words"));
-    g_assert_nonnull(strstr(output_b, "wayland=0\nwow64=0\ncustom=\ncount=1\n"));
+    g_assert_nonnull(strstr(output_a, "runner=GE-Proton\nwayland=1\nwow64=1\nnvapi=1\ncustom=one\ncount=3\nthird=two words"));
+    g_assert_nonnull(strstr(output_b, "wayland=0\nwow64=0\nnvapi=0\ncustom=\ncount=1\n"));
 }
 
 static void rejects_reserved_environment(void)

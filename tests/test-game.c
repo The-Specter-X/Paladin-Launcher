@@ -20,6 +20,7 @@ static void save_load_and_shortcut(void)
     game->executable = g_strdup("/tmp/game with spaces.exe");
     game->arguments = g_strdup("--windowed 'two words'");
     game->ready = TRUE;
+    game->nvapi = TRUE;
     g_autoptr(GError) error = NULL;
     g_assert_true(game_save(game, &error));
     g_assert_no_error(error);
@@ -28,6 +29,7 @@ static void save_load_and_shortcut(void)
     g_assert_cmpstr(loaded->name, ==, game->name);
     g_assert_true(loaded->wow64);
     g_assert_true(loaded->wayland);
+    g_assert_true(loaded->nvapi);
     g_assert_cmpstr(loaded->arguments, ==, game->arguments);
     g_assert_true(game_write_shortcuts(loaded, &error));
     g_assert_no_error(error);
