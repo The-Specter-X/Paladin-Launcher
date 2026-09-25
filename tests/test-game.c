@@ -1,6 +1,5 @@
 #include "game.h"
 #include <glib/gstdio.h>
-#include <unistd.h>
 
 static char *root;
 
@@ -55,7 +54,8 @@ static void deletion_never_follows_links(void)
     g_autofree char *outside = g_build_filename(root, "outside.txt", NULL);
     g_assert_true(g_file_set_contents(outside, "preserve", -1, &error));
     g_autofree char *link = g_build_filename(prefix, "outside-link", NULL);
-    g_assert_cmpint(symlink(outside, link), ==, 0);
+    g_autoptr(GFile) shortcut = g_file_new_for_path(link);
+    g_assert_true(g_file_make_symbolic_link(shortcut, outside, NULL, &error));
     g_assert_true(game_remove(game, &error));
     g_assert_no_error(error);
     g_assert_true(g_file_test(outside, G_FILE_TEST_EXISTS));

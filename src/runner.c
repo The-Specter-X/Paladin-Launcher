@@ -49,7 +49,8 @@ GSubprocess *runner_start(const Game *game, const char *executable,
                             "Select an existing game or installer executable");
         return NULL;
     }
-    if (!g_find_program_in_path("umu-run")) {
+    g_autofree char *umu = g_find_program_in_path("umu-run");
+    if (!umu) {
         g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
                             "umu-run is missing. Install umu-launcher to play Windows games.");
         return NULL;

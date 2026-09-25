@@ -16,3 +16,6 @@ test('game-storage', executable('test-game',
   ['tests/test-game.c', 'src/game.c'], dependencies: gio,
   include_directories: include_directories('src')))
 
+test('runner-isolation', executable('test-runner',
+  ['tests/test-runner.c', 'src/game.c', 'src/runner.c'], dependencies: gio,
+  include_directories: include_directories('src')))
