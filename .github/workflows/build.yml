@@ -2,23 +2,41 @@ name: Build and test
 on:
   push:
   pull_request:
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        sanitizer: [none, 'address,undefined']
+    env:
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build pkg-config libgtk-3-dev libxapp-dev xvfb xauth
-      - name: Configure
-        run: meson setup build -Dwerror=true
-      - name: Build
-        run: meson compile -C build
-      - name: Storage and safety tests
-        run: meson test -C build --print-errorlogs
-      - name: GTK startup smoke test
+          sudo apt-get install -y meson ninja-build pkg-config libgtk-3-dev libxapp-dev weston dbus-x11
+      - name: Configure and build
         run: |
-          status=0
-          GSETTINGS_BACKEND=memory xvfb-run -a timeout 3s ./build/paladin-launcher || status=$?
-          test "$status" -eq 124
+          meson setup build -Dwerror=true -Db_sanitize=${{ matrix.sanitizer }}
+          meson compile -C build
+      - name: Storage, launch and operation regressions
+        run: meson test -C build --suite core --print-errorlogs
+      - name: Real GTK dialogs on headless Wayland
+        run: |
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          export WAYLAND_DISPLAY=paladin-test GDK_BACKEND=wayland
+          export GSETTINGS_BACKEND=memory NO_AT_BRIDGE=1
+          weston --backend=headless-backend.so --socket=paladin-test --idle-time=0 --use-pixman > "$XDG_RUNTIME_DIR/weston.log" 2>&1 &
+          compositor=$!
+          trap 'kill "$compositor" || true; rm -rf "$XDG_RUNTIME_DIR"' EXIT
+          for attempt in $(seq 1 50); do
+            test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" && break
+            sleep 0.1
+          done
+          test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" || { cat "$XDG_RUNTIME_DIR/weston.log"; exit 1; }
+          dbus-run-session -- meson test -C build --suite gui --print-errorlogs

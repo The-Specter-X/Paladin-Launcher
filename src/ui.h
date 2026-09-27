@@ -1,6 +1,8 @@
 #pragma once
 #include <gtk/gtk.h>
+#include "operations.h"
 
+Operations *ui_operations(GtkApplication *application); /* borrowed */
+void ui_prepare(GtkApplication *application);
 void ui_activate(GtkApplication *application);
-GHashTable *ui_running_games(GtkApplication *application);
-void ui_refresh_game(GtkApplication *application, const char *id);
+void ui_show_failure(GtkApplication *application, const char *id, const char *message);

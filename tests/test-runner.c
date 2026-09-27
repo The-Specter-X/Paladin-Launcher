@@ -1,4 +1,5 @@
 #include "game.h"
+#include "storage.h"
 #include "runner.h"
 #include <glib/gstdio.h>
 #include <string.h>
@@ -13,7 +14,7 @@ static void runner_isolates_launches(void)
     const char *script = "#!/bin/sh\n"
         "printf 'prefix=%s\\nrunner=%s\\nwayland=%s\\nwow64=%s\\nnvapi=%s\\ncustom=%s\\ncount=%s\\nthird=%s\\n' "
         "\"$WINEPREFIX\" \"$PROTONPATH\" \"$PROTON_ENABLE_WAYLAND\" "
-        "\"$PROTON_USE_WOW64\" \"$PROTON_ENABLE_NVAPI\" \"$CUSTOM_FLAG\" \"$#\" \"$3\"\n";
+        "\"$PROTON_USE_WOW64\" \"$PROTON_FORCE_NVAPI\" \"$CUSTOM_FLAG\" \"$#\" \"$3\"\n";
     g_assert_true(g_file_set_contents(fake, script, -1, NULL));
     g_assert_cmpint(g_chmod(fake, 0755), ==, 0);
     g_autofree char *old_path = g_strdup(g_getenv("PATH"));
@@ -27,7 +28,7 @@ static void runner_isolates_launches(void)
     first->arguments = g_strdup("--foo 'two words'");
     g_free(first->environment);
     first->environment = g_strdup("CUSTOM_FLAG=one");
-    first->nvapi = TRUE;
+    first->nvapi = NVAPI_FORCED;
     g_autoptr(Game) second = game_new("Second");
     second->wayland = FALSE;
     second->wow64 = FALSE;
@@ -52,7 +53,7 @@ static void runner_isolates_launches(void)
     g_assert_nonnull(strstr(output_a, expected_a));
     g_assert_nonnull(strstr(output_b, expected_b));
     g_assert_nonnull(strstr(output_a, "runner=GE-Proton\nwayland=1\nwow64=1\nnvapi=1\ncustom=one\ncount=3\nthird=two words"));
-    g_assert_nonnull(strstr(output_b, "wayland=0\nwow64=0\nnvapi=0\ncustom=\ncount=1\n"));
+    g_assert_nonnull(strstr(output_b, "wayland=0\nwow64=0\nnvapi=\ncustom=\ncount=1\n"));
 }
 
 static void rejects_reserved_environment(void)
@@ -77,8 +78,15 @@ int main(int argc, char **argv)
     g_setenv("XDG_DATA_HOME", data, TRUE);
     g_setenv("XDG_CONFIG_HOME", config, TRUE);
     g_setenv("XDG_CACHE_HOME", cache, TRUE);
+    g_autofree char *state = g_build_filename(root, "state", NULL);
+    g_setenv("XDG_STATE_HOME", state, TRUE);
+    g_setenv("WAYLAND_DISPLAY", "test-display", TRUE);
+    g_setenv("DISPLAY", ":99", TRUE);
     g_test_init(&argc, &argv, NULL);
     g_test_add_func("/runner/per-game-environment", runner_isolates_launches);
     g_test_add_func("/runner/reserved-variables", rejects_reserved_environment);
-    return g_test_run();
+    int result = g_test_run();
+    g_assert_true(storage_remove(root, NULL, NULL));
+    g_free(root);
+    return result;
 }

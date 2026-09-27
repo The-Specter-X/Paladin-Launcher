@@ -1,4 +1,5 @@
 #include "game.h"
+#include "storage.h"
 
 #include <errno.h>
 #include <glib/gstdio.h>
@@ -36,6 +37,13 @@ Game *game_new(const char *name)
     game->runner = g_strdup("GE-Proton");
     game->arguments = g_strdup("");
     game->environment = g_strdup("");
+    game->root = g_strdup("");
+    game->working_dir = g_strdup("");
+    game->umu_id = g_strdup("");
+    game->last_runner = g_strdup("");
+    game->previous_runner = g_strdup("");
+    game->last_version = g_strdup("");
+    game->last_backup = g_strdup("");
     game->wayland = TRUE;
     game->wow64 = TRUE;
     return game;
@@ -46,7 +54,32 @@ void game_free(Game *game)
     if (!game) return;
     g_free(game->id); g_free(game->name); g_free(game->executable);
     g_free(game->installer); g_free(game->runner); g_free(game->arguments);
-    g_free(game->environment); g_free(game);
+    g_free(game->environment);
+    g_free(game->root); g_free(game->working_dir); g_free(game->umu_id);
+    g_free(game->last_runner); g_free(game->previous_runner);
+    g_free(game->last_version); g_free(game->last_backup);
+    g_free(game);
+}
+
+Game *game_copy(const Game *game)
+{
+    Game *copy = g_new(Game, 1);
+    *copy = *game;
+    copy->id = g_strdup(game->id);
+    copy->name = g_strdup(game->name);
+    copy->executable = g_strdup(game->executable);
+    copy->installer = g_strdup(game->installer);
+    copy->runner = g_strdup(game->runner);
+    copy->arguments = g_strdup(game->arguments);
+    copy->environment = g_strdup(game->environment);
+    copy->root = g_strdup(game->root);
+    copy->working_dir = g_strdup(game->working_dir);
+    copy->umu_id = g_strdup(game->umu_id);
+    copy->last_runner = g_strdup(game->last_runner);
+    copy->previous_runner = g_strdup(game->previous_runner);
+    copy->last_version = g_strdup(game->last_version);
+    copy->last_backup = g_strdup(game->last_backup);
+    return copy;
 }
 
 char *game_data_path(const Game *game)
@@ -72,7 +105,7 @@ char *game_log_path(const Game *game, gboolean errors)
 {
     g_autofree char *filename = g_strdup_printf("%s.%s.log", game->id,
                                                 errors ? "err" : "out");
-    return g_build_filename(g_get_user_cache_dir(), APP_DIR, "logs", filename, NULL);
+    return g_build_filename(g_get_user_state_dir(), APP_DIR, "logs", filename, NULL);
 }
 
 gboolean game_save(const Game *game, GError **error)
@@ -93,11 +126,20 @@ gboolean game_save(const Game *game, GError **error)
     g_key_file_set_string(key, "Game", "Runner", game->runner ? game->runner : "GE-Proton");
     g_key_file_set_string(key, "Game", "Arguments", game->arguments ? game->arguments : "");
     g_key_file_set_string(key, "Game", "Environment", game->environment ? game->environment : "");
+    g_key_file_set_string(key, "Game", "Root", game->root ? game->root : "");
+    g_key_file_set_string(key, "Game", "WorkingDirectory", game->working_dir ? game->working_dir : "");
+    g_key_file_set_string(key, "Game", "UmuId", game->umu_id ? game->umu_id : "");
+    g_key_file_set_string(key, "Game", "LastRunner", game->last_runner ? game->last_runner : "");
+    g_key_file_set_string(key, "Game", "PreviousRunner", game->previous_runner ? game->previous_runner : "");
+    g_key_file_set_string(key, "Game", "LastVersion", game->last_version ? game->last_version : "");
+    g_key_file_set_string(key, "Game", "LastBackup", game->last_backup ? game->last_backup : "");
+    g_key_file_set_boolean(key, "Game", "DiscoveryPending", game->discover_pending);
+    g_key_file_set_boolean(key, "Game", "Removing", game->removing);
     g_key_file_set_boolean(key, "Game", "ManagedFiles", game->managed_files);
     g_key_file_set_boolean(key, "Game", "Wayland", game->wayland);
     g_key_file_set_boolean(key, "Game", "WoW64", game->wow64);
     g_key_file_set_boolean(key, "Game", "FSR", game->fsr);
-    g_key_file_set_boolean(key, "Game", "NVAPI", game->nvapi);
+    g_key_file_set_integer(key, "Game", "NvapiMode", game->nvapi);
     g_key_file_set_boolean(key, "Game", "WineD3D", game->wined3d);
     g_key_file_set_boolean(key, "Game", "DesktopShortcut", game->desktop_shortcut);
     g_key_file_set_boolean(key, "Game", "Ready", game->ready);
@@ -135,14 +177,30 @@ Game *game_load(const char *id, GError **error)
     game->runner = read_string(key, "Runner");
     game->arguments = read_string(key, "Arguments");
     game->environment = read_string(key, "Environment");
+    game->root = read_string(key, "Root");
+    game->working_dir = read_string(key, "WorkingDirectory");
+    game->umu_id = read_string(key, "UmuId");
+    game->last_runner = read_string(key, "LastRunner");
+    game->previous_runner = read_string(key, "PreviousRunner");
+    game->last_version = read_string(key, "LastVersion");
+    game->last_backup = read_string(key, "LastBackup");
+    game->discover_pending = read_boolean(key, "DiscoveryPending", FALSE);
+    game->removing = read_boolean(key, "Removing", FALSE);
     game->managed_files = read_boolean(key, "ManagedFiles", FALSE);
     game->wayland = read_boolean(key, "Wayland", TRUE);
     game->wow64 = read_boolean(key, "WoW64", TRUE);
     game->fsr = read_boolean(key, "FSR", FALSE);
-    game->nvapi = read_boolean(key, "NVAPI", FALSE);
+    game->nvapi = g_key_file_has_key(key, "Game", "NvapiMode", NULL) ?
+        g_key_file_get_integer(key, "Game", "NvapiMode", NULL) :
+        (read_boolean(key, "NVAPI", FALSE) ? NVAPI_FORCED : NVAPI_AUTO);
     game->wined3d = read_boolean(key, "WineD3D", FALSE);
     game->desktop_shortcut = read_boolean(key, "DesktopShortcut", FALSE);
     game->ready = read_boolean(key, "Ready", FALSE);
+    if (!*game->root && *game->executable) {
+        g_free(game->root); game->root = g_path_get_dirname(game->executable);
+    }
+    if (!g_key_file_has_key(key, "Game", "DiscoveryPending", NULL))
+        game->discover_pending = !game->ready && *game->installer;
     if (!*game->name) {
         g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, "Game has no title");
         game_free(game);
@@ -235,107 +293,121 @@ gboolean game_write_shortcuts(const Game *game, GError **error)
     return TRUE;
 }
 
-static gboolean delete_tree(GFile *file, GError **error)
-{
-    GFileType type = g_file_query_file_type(file, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL);
-    if (type == G_FILE_TYPE_UNKNOWN) return TRUE;
-    if (type == G_FILE_TYPE_DIRECTORY) {
-        g_autoptr(GFileEnumerator) items = g_file_enumerate_children(
-            file, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-            NULL, error);
-        if (!items) return FALSE;
-        g_autoptr(GFileInfo) info = NULL;
-        while ((info = g_file_enumerator_next_file(items, NULL, error))) {
-            g_autoptr(GFile) child = g_file_get_child(file, g_file_info_get_name(info));
-            if (!delete_tree(child, error)) return FALSE;
-            g_clear_object(&info);
-        }
-        if (error && *error) return FALSE;
-    }
-    return g_file_delete(file, NULL, error);
-}
-
-gboolean game_remove(const Game *game, GError **error)
+gboolean game_remove_full(const Game *game, GCancellable *cancel, GError **error)
 {
     g_return_val_if_fail(valid_id(game->id), FALSE);
-    Game shortcut = *game;
-    shortcut.ready = FALSE;
-    if (!game_write_shortcuts(&shortcut, error)) return FALSE;
+    g_autoptr(Game) pending = game_copy(game);
+    pending->removing = TRUE;
+    pending->ready = FALSE;
+    if (!game_save(pending, error)) return FALSE;
     g_autofree char *path = game_data_path(game);
-    g_autoptr(GFile) data = g_file_new_for_path(path);
-    if (!delete_tree(data, error)) return FALSE;
+    if (!storage_remove(path, cancel, error)) return FALSE;
+    /* Keep the tombstone until data, logs and shortcuts have all been removed. */
+    for (int i = 0; i < 2; i++) {
+        g_autofree char *log = game_log_path(game, i == 1);
+        if (!storage_remove(log, cancel, error)) return FALSE;
+        g_autofree char *base = g_path_get_basename(log);
+        g_autofree char *legacy = g_build_filename(g_get_user_cache_dir(), APP_DIR, "logs", base, NULL);
+        if (!storage_remove(legacy, cancel, error)) return FALSE;
+    }
+    g_autofree char *diagnostics = g_build_filename(g_get_user_state_dir(), APP_DIR, "logs", game->id, NULL);
+    if (!storage_remove(diagnostics, cancel, error)) return FALSE;
+    if (!game_write_shortcuts(pending, error)) return FALSE;
     g_autofree char *config = game_config_path(game);
     if (g_unlink(config) != 0 && errno != ENOENT) {
         g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
                     "Cannot remove game settings: %s", g_strerror(errno));
         return FALSE;
     }
-    for (int i = 0; i < 2; i++) {
-        g_autofree char *log = game_log_path(game, i == 1);
-        g_unlink(log);
-    }
     return TRUE;
 }
 
-static gboolean copy_tree(GFile *source, GFile *target, GCancellable *cancellable,
-                          unsigned int depth, GError **error)
+gboolean game_remove(const Game *game, GError **error)
 {
-    if (depth > 40) {
-        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                            "Game directory nesting is too deep");
-        return FALSE;
-    }
-    GFileType type = g_file_query_file_type(source, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                             cancellable);
-    if (type == G_FILE_TYPE_SYMBOLIC_LINK) return TRUE; /* Do not copy outside the selected tree. */
-    if (type == G_FILE_TYPE_REGULAR) {
-        GFileType target_type = g_file_query_file_type(target,
-            G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, cancellable);
-        if (target_type != G_FILE_TYPE_UNKNOWN && target_type != G_FILE_TYPE_REGULAR) {
-            g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_EXISTS,
-                                "The managed game folder contains an unexpected file or link");
-            return FALSE;
-        }
-        return g_file_copy(source, target,
-                           G_FILE_COPY_NOFOLLOW_SYMLINKS | G_FILE_COPY_OVERWRITE,
-                           cancellable, NULL, NULL, error);
-    }
-    if (type != G_FILE_TYPE_DIRECTORY) {
-        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
-                            "Selected game contains an unsupported file type");
-        return FALSE;
-    }
-    GFileType existing = g_file_query_file_type(target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                                 cancellable);
-    if (existing != G_FILE_TYPE_UNKNOWN && existing != G_FILE_TYPE_DIRECTORY) {
-        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_EXISTS,
-                            "The managed game folder contains an unexpected file or link");
-        return FALSE;
-    }
-    if (!g_file_make_directory_with_parents(target, cancellable, error)) {
-        if (!error || !g_error_matches(*error, G_IO_ERROR, G_IO_ERROR_EXISTS)) return FALSE;
-        g_clear_error(error);
-    }
-    g_autoptr(GFileEnumerator) items = g_file_enumerate_children(
-        source, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-        cancellable, error);
-    if (!items) return FALSE;
-    g_autoptr(GFileInfo) info = NULL;
-    while ((info = g_file_enumerator_next_file(items, cancellable, error))) {
-        g_autoptr(GFile) from = g_file_get_child(source, g_file_info_get_name(info));
-        g_autoptr(GFile) to = g_file_get_child(target, g_file_info_get_name(info));
-        if (!copy_tree(from, to, cancellable, depth + 1, error)) return FALSE;
-        g_clear_object(&info);
-    }
-    return !(error && *error);
+    return game_remove_full(game, NULL, error);
 }
 
 gboolean game_copy_folder(const char *source, const char *destination,
-                          GCancellable *cancellable, GError **error)
+                          GCancellable *cancel, GError **error)
 {
-    g_autoptr(GFile) from = g_file_new_for_path(source);
-    g_autoptr(GFile) to = g_file_new_for_path(destination);
-    return copy_tree(from, to, cancellable, 0, error);
+    return storage_copy(source, destination, cancel, error);
+}
+
+gboolean game_import(Game *game, GCancellable *cancel, GError **error)
+{
+    g_autofree char *root = storage_resolve(game->root, error);
+    if (!root) return FALSE;
+    g_autofree char *exe = storage_resolve(game->executable, error);
+    if (!exe) return FALSE;
+    g_autoptr(GFile) from = g_file_new_for_path(root);
+    g_autoptr(GFile) executable = g_file_new_for_path(exe);
+    g_autofree char *relative = g_file_get_relative_path(from, executable);
+    if (!relative || !g_file_test(exe, G_FILE_TEST_IS_REGULAR)) {
+        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                            "The game EXE must be a file inside the selected game folder");
+        return FALSE;
+    }
+    g_autofree char *data = game_data_path(game);
+    g_autofree char *target = g_build_filename(data, "files", NULL);
+    if (!storage_copy(root, target, cancel, error)) return FALSE;
+    g_autofree char *copied = g_build_filename(target, relative, NULL);
+    if (!g_file_test(copied, G_FILE_TEST_IS_REGULAR)) {
+        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "The copied game EXE is missing");
+        return FALSE;
+    }
+    g_free(game->executable); game->executable = g_strdup(copied);
+    g_free(game->root); game->root = g_strdup(target);
+    g_free(game->working_dir); game->working_dir = g_strdup(target);
+    game->ready = TRUE;
+    return game_save(game, error) && game_write_shortcuts(game, error);
+}
+
+gboolean game_prefix_exists(const Game *game)
+{
+    g_autofree char *prefix = game_prefix_path(game);
+    g_autofree char *registry = g_build_filename(prefix, "system.reg", NULL);
+    g_autofree char *drive = g_build_filename(prefix, "drive_c", NULL);
+    return g_file_test(registry, G_FILE_TEST_EXISTS) || g_file_test(drive, G_FILE_TEST_IS_DIR);
+}
+
+gboolean game_reset_prefix(Game *game, GCancellable *cancel, GError **error)
+{
+    if (cancel && g_cancellable_set_error_if_cancelled(cancel, error)) return FALSE;
+    g_autofree char *prefix = game_prefix_path(game);
+    g_autofree char *data = game_data_path(game);
+    g_autofree char *id = g_uuid_string_random();
+    g_autofree char *backup = g_build_filename(data, "backups", id, NULL);
+    if (g_mkdir_with_parents(backup, 0700) != 0) {
+        g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno), "Cannot create prefix backup: %s", g_strerror(errno));
+        return FALSE;
+    }
+    g_autofree char *config = game_config_path(game);
+    g_autofree char *settings = g_build_filename(backup, "game.ini", NULL);
+    g_autoptr(GFile) source = g_file_new_for_path(config);
+    g_autoptr(GFile) dest = g_file_new_for_path(settings);
+    if (!g_file_copy(source, dest, G_FILE_COPY_NONE, cancel, NULL, NULL, error)) return FALSE;
+    g_autofree char *saved = g_build_filename(backup, "prefix", NULL);
+    if (g_rename(prefix, saved) != 0) {
+        g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno), "Cannot back up the prefix: %s", g_strerror(errno));
+        return FALSE;
+    }
+    g_free(game->last_backup); game->last_backup = g_strdup(backup);
+    g_autoptr(GFile) prefix_file = g_file_new_for_path(prefix);
+    g_autoptr(GFile) exe = g_file_new_for_path(game->executable && *game->executable ? game->executable : prefix);
+    if (g_file_equal(exe, prefix_file) || g_file_has_prefix(exe, prefix_file)) {
+        game->ready = FALSE;
+        g_free(game->root); game->root = g_strdup("");
+        g_free(game->executable); game->executable = g_strdup("");
+        g_free(game->working_dir); game->working_dir = g_strdup("");
+    }
+    game->discover_pending = FALSE;
+    if (!game_save(game, error)) {
+        /* The old metadata is still authoritative; put its prefix back. */
+        if (g_rename(saved, prefix) != 0)
+            g_warning("Prefix preserved at %s; rollback failed: %s", saved, g_strerror(errno));
+        return FALSE;
+    }
+    return game_write_shortcuts(game, error);
 }
 
 typedef struct { char *path; int score; } Candidate;
@@ -348,7 +420,7 @@ static int score_exe(const Game *game, const char *path)
     if (!g_str_has_suffix(base, ".exe") ||
         g_str_has_prefix(base, "unins") || g_str_has_prefix(base, "setup") ||
         g_str_has_prefix(base, "install") || g_str_has_prefix(base, "vcredist") ||
-        g_str_has_prefix(base, "dxsetup") || g_str_has_prefix(base, "crash") ||
+        g_str_has_prefix(base, "dxsetup") || g_str_has_prefix(base, "crashreport") ||
         g_str_has_prefix(base, "unitycrash") || g_str_has_prefix(base, "redist")) return -1;
     g_autofree char *title = g_ascii_strdown(game->name, -1);
     g_autoptr(GString) simple_title = g_string_new("");
@@ -363,18 +435,28 @@ static int score_exe(const Game *game, const char *path)
     return score;
 }
 
-static void scan_exes(const Game *game, const char *dir, GPtrArray *found, int depth)
+static gboolean scan_exes(const Game *game, const char *dir, GPtrArray *found,
+                           guint depth, guint *visited, GCancellable *cancel, GError **error)
 {
-    if (depth > 7 || found->len >= 300) return;
-    g_autoptr(GDir) entries = g_dir_open(dir, 0, NULL);
-    if (!entries) return;
-    const char *name;
-    while ((name = g_dir_read_name(entries)) && found->len < 300) {
+    if (cancel && g_cancellable_set_error_if_cancelled(cancel, error)) return FALSE;
+    if (depth > 16 || found->len >= 1000 || *visited >= 100000) return TRUE;
+    g_autoptr(GFile) directory = g_file_new_for_path(dir);
+    g_autoptr(GFileEnumerator) entries = g_file_enumerate_children(directory,
+        G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_TYPE,
+        G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, cancel, error);
+    if (!entries) return FALSE;
+    g_autoptr(GFileInfo) item = NULL;
+    while ((item = g_file_enumerator_next_file(entries, cancel, error))) {
+        (*visited)++;
+        const char *name = g_file_info_get_name(item);
         g_autofree char *path = g_build_filename(dir, name, NULL);
-        g_autoptr(GFile) file = g_file_new_for_path(path);
-        GFileType type = g_file_query_file_type(file, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL);
-        if (type == G_FILE_TYPE_DIRECTORY) scan_exes(game, path, found, depth + 1);
-        else if (type == G_FILE_TYPE_REGULAR) {
+        GFileType type = g_file_info_get_file_type(item);
+        if (type == G_FILE_TYPE_DIRECTORY) {
+            /* Ignore Windows itself and shared installer caches, not publisher folders. */
+            if (!(depth == 0 && (g_ascii_strcasecmp(name, "windows") == 0 ||
+                                g_ascii_strcasecmp(name, "ProgramData") == 0)))
+                if (!scan_exes(game, path, found, depth + 1, visited, cancel, error)) return FALSE;
+        } else if (type == G_FILE_TYPE_REGULAR) {
             int score = score_exe(game, path);
             if (score >= 0) {
                 Candidate *c = g_new0(Candidate, 1);
@@ -382,7 +464,10 @@ static void scan_exes(const Game *game, const char *dir, GPtrArray *found, int d
                 g_ptr_array_add(found, c);
             }
         }
+        g_clear_object(&item);
+        if (found->len >= 1000 || *visited >= 100000) break;
     }
+    return !(error && *error);
 }
 
 static gint candidate_compare(gconstpointer a, gconstpointer b)
@@ -393,16 +478,13 @@ static gint candidate_compare(gconstpointer a, gconstpointer b)
     return g_strcmp0(left->path, right->path);
 }
 
-GPtrArray *game_find_executables(const Game *game)
+GPtrArray *game_find_executables_full(const Game *game, GCancellable *cancel, GError **error)
 {
     g_autofree char *prefix = game_prefix_path(game);
+    g_autofree char *drive = g_build_filename(prefix, "drive_c", NULL);
     g_autoptr(GPtrArray) found = g_ptr_array_new_with_free_func((GDestroyNotify) candidate_free);
-    const char *folders[] = {"Program Files", "Program Files (x86)",
-                             "Games", "GOG Games", NULL};
-    for (int i = 0; folders[i]; i++) {
-        g_autofree char *dir = g_build_filename(prefix, "drive_c", folders[i], NULL);
-        scan_exes(game, dir, found, 0);
-    }
+    guint visited = 0;
+    if (!scan_exes(game, drive, found, 0, &visited, cancel, error)) return NULL;
     g_ptr_array_sort(found, candidate_compare);
     GPtrArray *result = g_ptr_array_new_with_free_func(g_free);
     for (guint i = 0; i < found->len; i++) {
@@ -410,4 +492,10 @@ GPtrArray *game_find_executables(const Game *game)
         g_ptr_array_add(result, g_strdup(c->path));
     }
     return result;
+}
+
+GPtrArray *game_find_executables(const Game *game)
+{
+    GPtrArray *found = game_find_executables_full(game, NULL, NULL);
+    return found ? found : g_ptr_array_new_with_free_func(g_free);
 }
