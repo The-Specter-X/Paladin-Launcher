@@ -67,6 +67,11 @@ static void failures_and_stale_settings(void)
     g_autoptr(Operations) ops = operations_new(NULL);
     g_signal_connect(ops, "completed", G_CALLBACK(completed), NULL);
     g_autoptr(Game) a = saved_game("Failure", "fail");
+    g_autoptr(GError) spawn_error = NULL;
+    g_assert_false(operations_run(ops, a->id, "/missing/setup.exe", OP_INSTALL, &spawn_error));
+    g_assert_nonnull(spawn_error);
+    g_autoptr(Game) unstarted = game_load(a->id, NULL);
+    g_assert_false(unstarted->discover_pending);
     g_assert_true(operations_run(ops, a->id, NULL, OP_PLAY, NULL));
     wait_idle(ops, a->id);
     g_assert_nonnull(strstr(last_error, "status 7"));

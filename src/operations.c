@@ -149,12 +149,19 @@ gboolean operations_run(Operations *self, const char *id, const char *path,
         return FALSE;
     }
     const char *exe = path ? path : kind == OP_INSTALL ? game->installer : game->executable;
+    gboolean previously_pending = game->discover_pending;
     if (kind == OP_INSTALL) {
         game->discover_pending = TRUE;
         if (!game_save(game, error)) return FALSE;
     }
     g_autoptr(GSubprocess) process = runner_start(game, exe, kind != OP_PLAY, error);
-    if (!process) return FALSE;
+    if (!process) {
+        if (kind == OP_INSTALL) {
+            game->discover_pending = previously_pending;
+            game_save(game, NULL);
+        }
+        return FALSE;
+    }
     Job *job = begin(self, g_steal_pointer(&game), kind);
     job->process = g_steal_pointer(&process);
     g_subprocess_wait_async(job->process, NULL, run_finished, job);

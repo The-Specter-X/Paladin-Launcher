@@ -8,6 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         sanitizer: [none, 'address,undefined']
     env:
@@ -18,7 +19,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build pkg-config libgtk-3-dev libxapp-dev weston dbus-x11
+          sudo apt-get install -y meson ninja-build pkg-config libgtk-3-dev libxapp-dev weston dbus-x11 xvfb xauth
       - name: Configure and build
         run: |
           meson setup build -Dwerror=true -Db_sanitize=${{ matrix.sanitizer }}
@@ -31,7 +32,7 @@ jobs:
           chmod 700 "$XDG_RUNTIME_DIR"
           export WAYLAND_DISPLAY=paladin-test GDK_BACKEND=wayland
           export GSETTINGS_BACKEND=memory NO_AT_BRIDGE=1
-          weston --backend=headless-backend.so --socket=paladin-test --idle-time=0 --use-pixman > "$XDG_RUNTIME_DIR/weston.log" 2>&1 &
+          xvfb-run -a weston --backend=x11-backend.so --socket=paladin-test --idle-time=0 --use-pixman > "$XDG_RUNTIME_DIR/weston.log" 2>&1 &
           compositor=$!
           trap 'kill "$compositor" || true; rm -rf "$XDG_RUNTIME_DIR"' EXIT
           for attempt in $(seq 1 50); do

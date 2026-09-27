@@ -42,7 +42,8 @@ publisher-folder discovery, quoted arguments, NVAPI defaults, child environments
 concurrent games, busy guards, failed/signalled launches, stale settings merges,
 option conflicts and backed-up architecture changes.
 
-The GUI test opens actual GTK dialogs on Wayland. While Settings and Remove
+The GUI test opens actual GTK dialogs on Wayland. CI runs Weston nested in Xvfb
+to provide a virtual keyboard/pointer seat; Paladin uses GDK_BACKEND=wayland. While Settings and Remove
 are waiting in nested GTK loops, it refreshes the library and changes selection.
 It verifies saved operational metadata survives and only the captured game is
 removed. It also closes/reopens the window and completes persisted installer
